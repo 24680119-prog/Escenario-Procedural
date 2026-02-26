@@ -50,7 +50,7 @@ Esto permite reutilizar materiales de manera organizada y evitar repetir código
 
 **return mat:** Devuelve el material para poder usarlo después.
 
-**mat_negro, mat_morado, mat_suelo:**Materiales creados a partir de la función definida.
+**mat_negro, mat_morado, mat_suelo:** Materiales creados a partir de la función definida.
 
 ```python
 #  MATERIALES 
@@ -106,9 +106,172 @@ Esta sección es fundamental porque define matemáticamente la forma del recorri
 **n = max(0, i - inicio_curva):** Controla cuándo inicia la curva.
 
 **math.sin():** Genera el movimiento curvo.
-offset: Desplazamiento horizontal en el eje X.
-y_actual += longitud_segmento: Hace avanzar el pasillo.
-append(): Guarda cada nueva posición en la lista.
+
+**offset:** Desplazamiento horizontal en el eje X.
+
+**y_actual += longitud_segmento:** Hace avanzar el pasillo.
+
+**append():** Guarda cada nueva posición en la lista.
+
+```python
+#  CALCULAR POSICIONES 
+posiciones = [(0, 0, 0)]
+x_actual, y_actual, direccion_actual = 0, 0, 0
+
+for i in range(largo_pasillo):
+    n = max(0, i - inicio_curva)
+    offset = math.sin(n * 0.3) * amplitud * min(1.0, n/10)
+
+    x_actual = offset
+    y_actual += longitud_segmento
+    posiciones.append((x_actual, y_actual, direccion_actual))
+
+```
+## Creacion de las paredes del pasillo 
+
+En esta sección del código se generan las paredes del pasillo utilizando cubos. Estos cubos se colocan a ambos lados del recorrido siguiendo las posiciones previamente calculadas.Primero se inicia un ciclo for que recorre la lista posiciones. Se utiliza len(posiciones) - 1 porque se trabaja comparando segmentos consecutivos y se evita salir del rango de la lista, en cada iteración se extraen los valores x, y y angulo desde la lista posiciones. Estas coordenadas indican dónde debe colocarse cada sección del pasillo.
+
+Para crear la pared izquierda, se usa bpy.ops.mesh.primitive_cube_add() y se coloca el cubo en la posición (x - ancho_pasillo, y, 1). Restar ancho_pasillo en el eje X desplaza el cubo hacia la izquierda del centro del pasillo. El valor 1 en el eje Z eleva el cubo ligeramente para que quede sobre el suelo, después se guarda el cubo recién creado en la variable pared_izq usando bpy.context.active_object.
+
+Luego se ajusta su tamaño con scale = (0.8, 0.8, 2), esto hace que el cubo sea más alto en el eje Z y más delgado en los ejes X y Y dándole forma de pared, posteriormente  se asigna el material utilizando una condición: **mat_negro if i % 2 == 0 else mat_morado**. El operador % es el módulo, que calcula el residuo de la división entre 2. Si el resultado es 0, significa que el número es par. Esto permite alternar los colores entre negro y morado para crear un patrón visual. El mismo procedimiento se repite para la pared derecha, pero en lugar de restar ancho_pasillo, se suma, esto coloca el cubo al lado contrario del pasillo. También se invierte el orden de los materiales para que el patrón alternado sea simétrico.
 
 
+**for i in range(len(posiciones) - 1):** Recorre todas las posiciones calculadas.
 
+**bpy.ops.mesh.primitive_cube_add():** Crea un cubo en la posición indicada.
+
+**bpy.context.active_object:** Obtiene el objeto recién creado.
+
+**scale:** Modifica el tamaño del cubo.
+
+**i % 2:** Permite alternar colores entre negro y morado.
+
+**ancho_pasillo:** Controla la distancia de las paredes respecto al centro.
+
+
+```python
+# ---------------- CREAR PAREDES (CUBOS) ----------------
+for i in range(len(posiciones) - 1):
+    x, y, angulo = posiciones[i]
+
+    # Izquierda
+    bpy.ops.mesh.primitive_cube_add(location=(x - ancho_pasillo, y, 1))
+    pared_izq = bpy.context.active_object
+    pared_izq.scale = (0.8, 0.8, 2)
+    pared_izq.data.materials.append(mat_negro if i % 2 == 0 else mat_morado)
+
+    # Derecha
+    bpy.ops.mesh.primitive_cube_add(location=(x + ancho_pasillo, y, 1))
+    pared_der = bpy.context.active_object
+    pared_der.scale = (0.8, 0.8, 2)
+    pared_der.data.materials.append(mat_morado if i % 2 == 0 else mat_negro)
+
+```
+
+## Creacion del suelo 
+En esta sección se construye el suelo del pasillo utilizando geometría personalizada. A diferencia de las paredes, que se crean con cubos predeterminados, aquí se genera una malla manualmente usando el módulo bmesh. Primero se crean dos listas vacías llamadas borde_izq y borde_der. Estas listas almacenarán los puntos que formarán los bordes izquierdo y derecho del suelo, luego se recorre la lista posiciones. En cada iteración se agregan nuevos puntos a ambas listas.
+Para el borde izquierdo se calcula la posición restando ancho_pasillo y sumando grosor_pared, mientras que para el borde derecho se suma ancho_pasillo y se resta **grosor_pared** esto permite que el suelo quede ligeramente dentro de las paredes y no se sobreponga con ellas. El valor 0 en el eje Z indica que el suelo estará al nivel base.
+Después se crea una nueva malla con bpy.data.meshes.new("SueloCurvo") y luego se crea un objeto usando esa malla y se enlaza a la colección actual para que aparezca en la escena. A continuación, se crea un objeto bmesh nuevo con bmesh.new(). Este permite construir la geometría manualmente, se crean los vértices del lado izquierdo y derecho usando comprensión de listas, cada punto guardado anteriormente se convierte en un vértice real dentro de la malla.Después, mediante un ciclo for, se crean las caras del suelo. Cada cara conecta cuatro vértices consecutivos (dos del lado izquierdo y dos del lado derecho). Esto forma una serie de rectángulos que componen la superficie del suelo una vez construida la geometría, se transfiere la información del bmesh a la malla real con bm.to_mesh(mesh) y luego se libera la memoria con bm.free(), posteriormente se asigna el material gris al suelo finalmente, se añade un modificador llamado “Subdivision” que suaviza la geometría, haciendo que el suelo se vea más curvo y menos segmentado. También se aplica shade_smooth() para suavizar visualmente las superficies, esta sección es clave porque transforma los cálculos matemáticos en una superficie continua y real dentro del entorno 3D.
+
+**borde_izq / borde_der:** Listas que almacenan los puntos del suelo.
+
+**bpy.data.meshes.new():** Crea una nueva malla.
+
+**bmesh.new():** Permite construir geometría manualmente.
+
+**bm.verts.new():** Crea vértices.
+
+**bm.faces.new()** Crea caras conectando vértices.
+
+**bm.to_mesh():** Transfiere la geometría al objeto real.
+
+**Subdivision Surface:** Suaviza la malla.
+
+**shade_smooth():** Mejora el aspecto visual.
+
+```python
+#  CREAR SUELO CURVO 
+borde_izq = []
+borde_der = []
+
+for x, y, angulo in posiciones:
+    borde_izq.append((x - ancho_pasillo + grosor_pared, y, 0))
+    borde_der.append((x + ancho_pasillo - grosor_pared, y, 0))
+
+mesh = bpy.data.meshes.new("SueloCurvo")
+obj_suelo = bpy.data.objects.new("SueloCurvo", mesh)
+bpy.context.collection.objects.link(obj_suelo)
+
+bm = bmesh.new()
+verts_izq = [bm.verts.new(p) for p in borde_izq]
+verts_der = [bm.verts.new(p) for p in borde_der]
+
+for i in range(len(verts_izq) - 1):
+    bm.faces.new((verts_izq[i], verts_der[i],
+                  verts_der[i + 1], verts_izq[i + 1]))
+
+bm.to_mesh(mesh)
+bm.free()
+
+obj_suelo.data.materials.append(mat_suelo)
+
+subsurf = obj_suelo.modifiers.new(name="Subdivision", type='SUBSURF')
+subsurf.levels = 2
+bpy.context.view_layer.objects.active = obj_suelo
+bpy.ops.object.shade_smooth()
+
+
+```
+
+## Animacion de la Camara a lo largo del pasillo 
+
+En esta sección del código se crea una cámara y se programa su movimiento para que recorra automáticamente el pasillo generado, primero se agrega una cámara a la escena con bpy.ops.object.camera_add(). Luego se guarda la cámara recién creada en la variable cam utilizando bpy.context.active_object, lo que permite modificar sus propiedades, después se ajusta su rotación con **cam.rotation_euler = (math.radians(90), 0, 0)**, aquí se convierte 90 grados a radianes porque Blender trabaja internamente en radianes. Esta rotación orienta la cámara correctamente para que apunte hacia el recorrido del pasillo, luego se inicia un ciclo for que va del fotograma 1 al 250. Esto significa que la animación tendrá 250 cuadros (frames).
+
+Dentro del ciclo se calcula la variable progreso, que representa cuánto ha avanzado la cámara a lo largo del pasillo. Se obtiene dividiendo el fotograma actual entre el total y multiplicándolo por la longitud total del recorrido, después se calcula n_cam, que controla el inicio de la curva para la cámara, de manera similar a como se hizo al construir el pasillo, la variable offset_cam usa la función seno para calcular el desplazamiento lateral en el eje X. Esto permite que la cámara siga exactamente la misma curva que el pasillo.
+
+Luego se actualizan las coordenadas de la cámara:
+
+-En el eje X se aplica el desplazamiento lateral.
+
+-En el eje Y se mueve hacia adelante según el progreso.
+
+-En el eje Z se mantiene a una altura fija de 1.5 unidades.
+
+Finalmente, se utiliza **cam.keyframe_insert()** para guardar la posición de la cámara en cada fotograma. Esto crea automáticamente la animación, haciendo que la cámara se desplace suavemente a lo largo del pasillo. Esta sección es importante porque convierte el escenario estático en una experiencia dinámica, permitiendo visualizar el recorrido en movimiento.
+
+
+**camera_add():** Agrega una cámara a la escena.
+
+**rotation_euler:** Ajusta la orientación de la cámara.
+
+**range(1, 251):** Define la duración de la animación.
+
+**progreso:** Calcula el avance de la cámara.
+
+**math.sin():** Permite que la cámara siga la curva.
+
+**cam.location:** Define la posición en X, Y y Z.
+
+**keyframe_insert():** Guarda la posición en cada fotograma para crear animación.
+
+```python
+#  CÁMARA ANIMADA 
+bpy.ops.object.camera_add()
+cam = bpy.context.active_object
+cam.rotation_euler = (math.radians(90), 0, 0)
+
+for f in range(1, 251):
+    progreso = (f / 250) * (largo_pasillo - 1)
+
+    n_cam = max(0, progreso - inicio_curva)
+    offset_cam = math.sin(n_cam * 0.3) * amplitud * min(1.0, n_cam/10)
+
+    cam.location.x = offset_cam
+    cam.location.y = progreso * longitud_segmento
+    cam.location.z = 1.5
+
+    cam.keyframe_insert(data_path="location", frame=f)
+
+```
+
+## 
