@@ -1,6 +1,7 @@
 ## Escenario Procedural en Blender 
 Este programa está hecho en Python y se ejecuta dentro de Blender para crear automáticamente un escenario en 3D, el código construye un pasillo con paredes de colores alternados, un suelo con forma curva y una cámara que se mueve a lo largo del recorrido.
 Primero, el programa limpia la escena para empezar desde cero después crea los materiales que se usarán para dar color a las paredes y al suelo. Luego se definen algunos valores que controlan el tamaño del pasillo, cuándo empieza la curva y qué tan pronunciada será. Con ayuda de cálculos matemáticos, el programa genera las posiciones necesarias para formar un pasillo que comienza recto y luego se curva suavemente a partir de esas posiciones se crean las paredes usando cubos y el suelo usando una malla personalizada por ultimo se agrega una cámara que se anima automáticamente para avanzar por el pasillo.
+
 ## Importacion de modulos 
 Al inicio del programa se importan tres módulos que permiten que el script funcione correctamente dentro de Blender. Estos módulos le dan al código acceso a herramientas específicas necesarias para crear objetos, realizar cálculos matemáticos y construir geometría personalizada.
 
