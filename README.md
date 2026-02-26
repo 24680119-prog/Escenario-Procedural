@@ -1,4 +1,11 @@
 ## Escenario Procedural en Blender 
+Este programa está hecho en Python y se ejecuta dentro de Blender para crear automáticamente un escenario en 3D. El código construye un pasillo con paredes de colores alternados, un suelo con forma curva y una cámara que se mueve a lo largo del recorrido.
+
+Primero, el programa limpia la escena para empezar desde cero. Después crea los materiales que se usarán para dar color a las paredes y al suelo. Luego se definen algunos valores que controlan el tamaño del pasillo, cuándo empieza la curva y qué tan pronunciada será.
+
+Con ayuda de cálculos matemáticos, el programa genera las posiciones necesarias para formar un pasillo que comienza recto y luego se curva suavemente. A partir de esas posiciones se crean las paredes usando cubos y el suelo usando una malla personalizada.
+
+Finalmente, se agrega una cámara que se anima automáticamente para avanzar por el pasillo, y se coloca una luz para que todo pueda verse correctamente.
 
 ## Importacion de modulos 
 Al inicio del programa se importan tres módulos que permiten que el script funcione correctamente dentro de Blender. Estos módulos le dan al código acceso a herramientas específicas necesarias para crear objetos, realizar cálculos matemáticos y construir geometría personalizada.
@@ -274,4 +281,126 @@ for f in range(1, 251):
 
 ```
 
-## 
+##  Iluminacion de la escena 
+En esta sección final del código se agrega una fuente de luz para iluminar el pasillo. La iluminación es fundamental en un entorno 3D porque permite que los objetos sean visibles y que los materiales se aprecien correctamente, se utiliza la instrucción bpy.ops.object.light_add() para añadir una luz a la escena. El parámetro type='SUN' indica que se está creando una luz tipo Sol.
+
+La luz tipo Sol emite iluminación uniforme en una dirección específica, similar a la luz solar real. No depende de la distancia entre la luz y los objetos, lo que la hace ideal para iluminar escenas completas de manera consistente, el parámetro **location=(0, 0, 15)** establece la posición de la luz en el espacio tridimensional. En este caso, se coloca a una altura de 15 unidades en el eje Z, por encima del pasillo, lo que permite que la luz ilumine la escena desde arriba en esta ultim parte es importante porque sin iluminación los objetos podrían verse completamente oscuros, especialmente en el modo de renderizado.
+
+**light_add():** Agrega una fuente de luz a la escena.
+
+**type=‘SUN’:** Define que la luz será tipo Sol (iluminación uniforme).
+
+**location=(0, 0, 15):** Posición de la luz en el espacio 3D.
+
+## Codigo 
+
+```python
+
+import bpy
+import math
+import bmesh
+
+# ---------------- LIMPIAR ESCENA ----------------
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete()
+
+# ---------------- MATERIALES ----------------
+def crear_material(nombre, color_rgb):
+    mat = bpy.data.materials.new(name=nombre)
+    mat.diffuse_color = (*color_rgb, 1.0)
+    return mat
+
+mat_negro = crear_material("Negro", (0.05, 0.05, 0.05))
+mat_morado = crear_material("Morado", (0.5, 0.0, 0.8))  # Morado
+mat_suelo = crear_material("SueloGris", (0.4, 0.4, 0.4))
+
+# ---------------- PARÁMETROS ----------------
+largo_pasillo = 50
+ancho_pasillo = 3
+inicio_curva = 15
+amplitud = 6
+longitud_segmento = 2
+grosor_pared = 0.8
+
+# ---------------- CALCULAR POSICIONES ----------------
+posiciones = [(0, 0, 0)]
+x_actual, y_actual, direccion_actual = 0, 0, 0
+
+for i in range(largo_pasillo):
+    n = max(0, i - inicio_curva)
+    offset = math.sin(n * 0.3) * amplitud * min(1.0, n/10)
+
+    x_actual = offset
+    y_actual += longitud_segmento
+    posiciones.append((x_actual, y_actual, direccion_actual))
+
+# ---------------- CREAR PAREDES (CUBOS) ----------------
+for i in range(len(posiciones) - 1):
+    x, y, angulo = posiciones[i]
+
+    # Izquierda
+    bpy.ops.mesh.primitive_cube_add(location=(x - ancho_pasillo, y, 1))
+    pared_izq = bpy.context.active_object
+    pared_izq.scale = (0.8, 0.8, 2)
+    pared_izq.data.materials.append(mat_negro if i % 2 == 0 else mat_morado)
+
+    # Derecha
+    bpy.ops.mesh.primitive_cube_add(location=(x + ancho_pasillo, y, 1))
+    pared_der = bpy.context.active_object
+    pared_der.scale = (0.8, 0.8, 2)
+    pared_der.data.materials.append(mat_morado if i % 2 == 0 else mat_negro)
+
+# ---------------- CREAR SUELO CURVO ----------------
+borde_izq = []
+borde_der = []
+
+for x, y, angulo in posiciones:
+    borde_izq.append((x - ancho_pasillo + grosor_pared, y, 0))
+    borde_der.append((x + ancho_pasillo - grosor_pared, y, 0))
+
+mesh = bpy.data.meshes.new("SueloCurvo")
+obj_suelo = bpy.data.objects.new("SueloCurvo", mesh)
+bpy.context.collection.objects.link(obj_suelo)
+
+bm = bmesh.new()
+verts_izq = [bm.verts.new(p) for p in borde_izq]
+verts_der = [bm.verts.new(p) for p in borde_der]
+
+for i in range(len(verts_izq) - 1):
+    bm.faces.new((verts_izq[i], verts_der[i],
+                  verts_der[i + 1], verts_izq[i + 1]))
+
+bm.to_mesh(mesh)
+bm.free()
+
+obj_suelo.data.materials.append(mat_suelo)
+
+subsurf = obj_suelo.modifiers.new(name="Subdivision", type='SUBSURF')
+subsurf.levels = 2
+bpy.context.view_layer.objects.active = obj_suelo
+bpy.ops.object.shade_smooth()
+
+# ---------------- CÁMARA ANIMADA ----------------
+bpy.ops.object.camera_add()
+cam = bpy.context.active_object
+cam.rotation_euler = (math.radians(90), 0, 0)
+
+for f in range(1, 251):
+    progreso = (f / 250) * (largo_pasillo - 1)
+
+    n_cam = max(0, progreso - inicio_curva)
+    offset_cam = math.sin(n_cam * 0.3) * amplitud * min(1.0, n_cam/10)
+
+    cam.location.x = offset_cam
+    cam.location.y = progreso * longitud_segmento
+    cam.location.z = 1.5
+
+    cam.keyframe_insert(data_path="location", frame=f)
+
+# ---------------- LUZ ----------------
+bpy.ops.object.light_add(type='SUN', location=(0, 0, 15))
+
+```
+<img width="835" height="550" alt="image" src="https://github.com/user-attachments/assets/826a0386-4b2c-4c4f-b7bf-e713f4472275" />
+
+
